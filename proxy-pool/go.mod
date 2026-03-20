@@ -1,6 +1,6 @@
 module proxy-pool
 
-go 1.22.0
+go 1.24.0
 
 require github.com/oschwald/geoip2-golang v1.9.0
 
@@ -16,5 +16,5 @@ require (
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.46.1 // indirect
+	modernc.org/sqlite v1.34.5 // indirect
 )

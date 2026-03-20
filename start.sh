@@ -19,16 +19,24 @@ if [ ! -f "$SCRIPT_DIR/.env" ]; then
     exit 1
 fi
 
-# 检查 Go 引擎是否已编译
+# 检查 Go 引擎
 if [ ! -f "$SCRIPT_DIR/proxy-pool/proxy-pool" ]; then
-    echo "[INFO] Go 引擎未编译，正在编译..."
-    cd "$SCRIPT_DIR/proxy-pool"
-    if ! go build -o proxy-pool .; then
-        echo "[ERROR] Go 引擎编译失败，请检查 Go 环境或模块依赖！"
-        exit 1
+    # 优先使用预编译的二进制文件
+    if [ -f "$SCRIPT_DIR/proxy-pool/proxy-pool-linux" ]; then
+        echo "[INFO] 使用预编译的 Go 引擎..."
+        mv "$SCRIPT_DIR/proxy-pool/proxy-pool-linux" "$SCRIPT_DIR/proxy-pool/proxy-pool"
+        chmod +x "$SCRIPT_DIR/proxy-pool/proxy-pool"
+        echo "[OK] Go 引擎已就绪"
+    else
+        echo "[INFO] Go 引擎未编译，正在编译..."
+        cd "$SCRIPT_DIR/proxy-pool"
+        if ! go build -o proxy-pool .; then
+            echo "[ERROR] Go 引擎编译失败，请检查 Go 环境或模块依赖！"
+            exit 1
+        fi
+        echo "[OK] Go 引擎编译完成"
+        cd "$SCRIPT_DIR"
     fi
-    echo "[OK] Go 引擎编译完成"
-    cd "$SCRIPT_DIR"
 fi
 
 # 检查 Python 依赖
