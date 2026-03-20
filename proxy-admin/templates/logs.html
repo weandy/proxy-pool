@@ -73,7 +73,7 @@ function filterLogs() {
 
 async function loadLogs() {
   try {
-    const resp = await api('/admin/api/logs/engine?n=500');
+    const resp = await api('GET', '/admin/api/logs/engine?n=500');
     allLogs = resp.logs || [];
     filterLogs();
     // 自动滚动到底部
