@@ -261,8 +261,9 @@ func (s *Scheduler) Trigger() bool {
 
 	// 8. 第二轮：HTTPS 复测（只验证 HTTP 通过的代理）
 	if len(httpPassed) > 0 && ctx.Err() == nil {
-		// 重置协议标记
-		s.store.ResetProtocol()
+		// 非破坏性：先收集通过 HTTPS 的代理，最后批量更新
+		var httpsOK []string
+		var httpsOKMu sync.Mutex
 
 		countryMap := s.store.GetCountryMap()
 		httpsTotal := int64(len(httpPassed))
@@ -271,7 +272,9 @@ func (s *Scheduler) Trigger() bool {
 
 		RunVerifyHTTPS(ctx, cfg, httpPassed, countryMap, func(r CheckResult) {
 			if r.Ok {
-				s.store.UpdateProtocol(r.Addr, "http,https")
+				httpsOKMu.Lock()
+				httpsOK = append(httpsOK, r.Addr)
+				httpsOKMu.Unlock()
 			}
 			pct := 0.0
 			if r.Total > 0 {
@@ -284,7 +287,12 @@ func (s *Scheduler) Trigger() bool {
 			})
 		})
 
-		slog.Info("HTTPS 复测完成", "https", s.store.HTTPSCount(), "http_only", s.store.Total()-s.store.HTTPSCount())
+		// 批量更新：先重置所有为 http，再标记通过的为 http,https
+		s.store.ResetProtocol()
+		for _, addr := range httpsOK {
+			s.store.UpdateProtocol(addr, "http,https")
+		}
+		slog.Info("HTTPS 复测完成", "https", len(httpsOK), "http_only", len(httpPassed)-len(httpsOK))
 	}
 
 	s.store.MarkUpdated()
@@ -313,8 +321,10 @@ func (s *Scheduler) Trigger() bool {
 	// 12. 刷新快照
 	s.store.RefreshSnapshot()
 
-	// 12.5 每日 VACUUM 回收磁盘空间
-	s.store.Vacuum()
+	// 12.5 每 10 轮 VACUUM 回收磁盘空间（避免频繁锁库）
+	if s.roundCount%10 == 0 {
+		s.store.Vacuum()
+	}
 
 	// 13. Telegram 通知
 	NotifyRoundSummary(cfg, s.store, purged)

@@ -84,14 +84,23 @@ func DefaultConfig() Config {
 	}
 }
 
-// LoadConfig 从文件加载配置
+// LoadConfig 从文件加载配置，环境变量可覆盖关键字段
 func LoadConfig(path string) Config {
 	cfg := DefaultConfig()
 	data, err := os.ReadFile(path)
-	if err != nil {
-		return cfg
+	if err == nil {
+		_ = json.Unmarshal(data, &cfg)
 	}
-	_ = json.Unmarshal(data, &cfg)
+	// 环境变量覆盖（优先级最高）
+	if v := os.Getenv("INTERNAL_KEY"); v != "" {
+		cfg.InternalKey = v
+	}
+	if v := os.Getenv("LISTEN_ADDR"); v != "" {
+		cfg.ListenAddr = v
+	}
+	if v := os.Getenv("DB_PATH"); v != "" {
+		cfg.DBPath = v
+	}
 	return cfg
 }
 

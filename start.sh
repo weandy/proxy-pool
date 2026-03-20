@@ -19,6 +19,11 @@ if [ ! -f "$SCRIPT_DIR/.env" ]; then
     exit 1
 fi
 
+# 加载 .env 为环境变量（Go 引擎通过 os.Getenv 读取）
+set -a
+source <(grep -v '^#' "$SCRIPT_DIR/.env" | grep -v '^\s*$')
+set +a
+
 # 检查 Go 引擎
 if [ ! -f "$SCRIPT_DIR/proxy-pool/proxy-pool" ]; then
     # 优先使用预编译的二进制文件

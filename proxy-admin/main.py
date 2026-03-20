@@ -126,7 +126,39 @@ async def csrf_middleware(request: Request, call_next):
 app.include_router(api_router)
 
 
-# ==================== 管理页面路由（JWT 登录）====================
+# ==================== 登录失败限制 ====================
+_login_attempts: dict = {}  # ip -> {count, locked_until}
+
+def _check_login_limit(ip: str) -> bool:
+    """检查 IP 是否被锁定，True=允许登录"""
+    info = _login_attempts.get(ip)
+    if not info:
+        return True
+    import time as _time
+    if info.get("locked_until", 0) > _time.time():
+        return False
+    return True
+
+def _record_login_failure(ip: str):
+    import time as _time
+    info = _login_attempts.setdefault(ip, {"count": 0, "locked_until": 0})
+    info["count"] += 1
+    if info["count"] >= 5:
+        info["locked_until"] = _time.time() + 300  # 锁定 5 分钟
+        info["count"] = 0
+
+def _reset_login_attempts(ip: str):
+    _login_attempts.pop(ip, None)
+
+
+# ==================== 健康检查 ====================
+
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok", "gateway": "running"}
+
+
+# ==================== 管理页面路由（JWT 登录）======================================
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -143,9 +175,14 @@ async def login_page(request: Request):
 
 @app.post("/login")
 async def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_login_limit(client_ip):
+        return templates.TemplateResponse("login.html", {"request": request, "error": "登录失败次数过多，请 5 分钟后重试"})
     token = check_login(username, password)
     if not token:
+        _record_login_failure(client_ip)
         return templates.TemplateResponse("login.html", {"request": request, "error": "用户名或密码错误"})
+    _reset_login_attempts(client_ip)
     resp = RedirectResponse("/dashboard", status_code=302)
     resp.set_cookie("token", token, httponly=True, max_age=86400)
     return resp

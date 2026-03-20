@@ -48,6 +48,15 @@ func withCORS(next http.HandlerFunc) http.HandlerFunc {
 // ==================== 路由注册 ====================
 
 func registerRoutes(mux *http.ServeMux, store *ProxyStore, sched *Scheduler, hotCfg *HotConfig) {
+	// 健康检查（无需鉴权）
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]interface{}{
+			"status":  "ok",
+			"proxies": store.Total(),
+			"engine":  "running",
+		})
+	})
+
 	// Go 引擎不暴露任何对外 API，所有 /api/* 由 Python 网关提供
 	// 只注册 /internal/* 管理接口（InternalKey 鉴权）
 

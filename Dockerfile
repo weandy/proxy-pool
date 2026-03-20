@@ -18,9 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && \
 COPY --from=go-builder /proxy-pool /app/proxy-pool/proxy-pool
 RUN chmod +x /app/proxy-pool/proxy-pool
 
-# 复制 GeoIP 和默认配置
-COPY proxy-pool/GeoLite2-Country.mmdb /app/proxy-pool/
+# 复制默认数据文件
 COPY proxy-pool/URLS.JSON /app/proxy-pool/
+# GeoIP 数据库运行时自动下载，无需构建时 COPY
 
 # Python 依赖
 COPY proxy-admin/requirements.txt /app/proxy-admin/
