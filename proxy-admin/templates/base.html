@@ -183,7 +183,8 @@ input[type=checkbox]:hover{border-color:var(--accent)}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
 function toggleSidebar(){document.querySelector('.sidebar').classList.toggle('open');document.getElementById('sidebarOverlay').classList.toggle('show')}
 async function api(method,url,body){
-  const opts={method,headers:{'Content-Type':'application/json','X-CSRF-Token':document.querySelector('meta[name=csrf-token]')?.content||''}};
+  const csrf=(document.cookie.match(/csrf_token=([^;]+)/)||[])[1]||'';
+  const opts={method,headers:{'Content-Type':'application/json','X-CSRF-Token':csrf}};
   if(body)opts.body=JSON.stringify(body);
   const r=await fetch(url,opts);
   return r.json();
