@@ -187,9 +187,13 @@ async def sse_stats(request: Request):
                     stats["total_keys"] = len(keys)
                     stats["active_keys"] = sum(1 for k in keys if k["is_active"])
                     yield f"data: {json_mod.dumps(stats, ensure_ascii=False, default=str)}\n\n"
+                    # 任务运行时 1 秒更新，空闲时 5 秒
+                    task = stats.get("task", {})
+                    interval = 1 if task.get("running") else 5
                 except Exception as e:
                     yield f"data: {{\"error\": \"{str(e)}\"}}\n\n"
-                await asyncio.sleep(5)
+                    interval = 5
+                await asyncio.sleep(interval)
         finally:
             _sse_connections -= 1
 
