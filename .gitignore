@@ -1,0 +1,18 @@
+# 运行时产物
+*.db
+*.exe
+*.zip
+__pycache__/
+*.pyc
+
+# 敏感配置（勿提交真实凭据）
+.env
+proxy-pool/config.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

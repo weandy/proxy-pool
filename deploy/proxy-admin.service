@@ -1,0 +1,24 @@
+[Unit]
+Description=Proxy Admin Gateway (Python)
+After=network.target proxy-pool.service
+
+[Service]
+Type=simple
+User=proxypool
+WorkingDirectory=/opt/proxy-admin
+ExecStart=/opt/proxy-admin/venv/bin/python main.py
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+# 必须设置环境变量
+Environment=ENGINE_URL=http://127.0.0.1:18080
+Environment=INTERNAL_KEY=changeme
+Environment=ADMIN_HOST=0.0.0.0
+Environment=ADMIN_PORT=9090
+# Environment=ADMIN_USER=admin
+# Environment=ADMIN_PASS=your_secure_password
+# Environment=JWT_SECRET=your_jwt_secret
+
+[Install]
+WantedBy=multi-user.target

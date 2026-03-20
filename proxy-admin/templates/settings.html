@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% set active = "settings" %}
+{% block title %}系统配置 - Proxy Admin{% endblock %}
+{% block content %}
+<div class="hd"><h1>系统配置</h1><button class="btn btn-primary" onclick="saveConfig()">保存并生效</button></div>
+<div class="card">
+  <div class="card-h">验证参数（热更新）</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+    <div class="form-row"><label>并发数</label><input type="number" id="concurrency" value="{{ config.concurrency or 200 }}"></div>
+    <div class="form-row"><label>超时(秒)</label><input type="number" id="timeout_sec" value="{{ config.timeout_sec or 10 }}"></div>
+    <div class="form-row"><label>刷新间隔(分钟)</label><input type="number" id="refresh_interval_min" value="{{ config.refresh_interval_min or 60 }}"></div>
+    <div class="form-row"><label>验证方式</label>
+      <select id="verify_method">
+        <option value="apple" {% if config.verify_method == 'apple' %}selected{% endif %}>apple</option>
+        <option value="204" {% if config.verify_method == '204' %}selected{% endif %}>204</option>
+        <option value="httpbin" {% if config.verify_method == 'httpbin' %}selected{% endif %}>httpbin</option>
+      </select>
+    </div>
+    <div class="form-row"><label>蜜罐阈值</label><input type="number" id="honeypot_threshold" value="{{ config.honeypot_threshold or 50 }}"></div>
+    <div class="form-row"><label>对外 API Key</label><input type="text" id="api_key" value="{{ config.api_key or '' }}" placeholder="留空则不鉴权"></div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-h">评分参数（热更新）</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+    <div class="form-row"><label>延迟门槛(ms)</label><input type="number" id="max_latency_ms" value="{{ config.max_latency_ms or 5000 }}"></div>
+    <div class="form-row"><label>EMA 衰减系数</label><input type="number" id="score_decay_alpha" value="{{ config.score_decay_alpha or 0.3 }}" step="0.05"></div>
+    <div class="form-row"><label>拉黑阈值(连续失败)</label><input type="number" id="blacklist_fail_threshold" value="{{ config.blacklist_fail_threshold or 5 }}"></div>
+    <div class="form-row"><label>黑名单复活间隔(轮)</label><input type="number" id="blacklist_revive_rounds" value="{{ config.blacklist_revive_rounds or 3 }}"></div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-h">自动化策略（热更新）</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+    <div class="form-row"><label>自动淘汰</label>
+      <select id="auto_purge_enabled">
+        <option value="true" {% if config.auto_purge_enabled %}selected{% endif %}>开启</option>
+        <option value="false" {% if not config.auto_purge_enabled %}selected{% endif %}>关闭</option>
+      </select>
+    </div>
+    <div class="form-row"><label>淘汰轮数</label><input type="number" id="auto_purge_rounds" value="{{ config.auto_purge_rounds or 3 }}" min="1"></div>
+    <div class="form-row"></div>
+    <div class="form-row"><label>源自动评级</label>
+      <select id="source_auto_rate_enabled">
+        <option value="true" {% if config.source_auto_rate_enabled %}selected{% endif %}>开启</option>
+        <option value="false" {% if not config.source_auto_rate_enabled %}selected{% endif %}>关闭</option>
+      </select>
+    </div>
+    <div class="form-row"><label>最低有效率(%)</label><input type="number" id="source_min_valid_rate" value="{{ config.source_min_valid_rate or 1.0 }}" step="0.1"></div>
+    <div class="form-row"><label>最少抓取次数</label><input type="number" id="source_min_fetches" value="{{ config.source_min_fetches or 3 }}" min="1"></div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-h">Telegram 通知（热更新）</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+    <div class="form-row"><label>启用通知</label>
+      <select id="tg_enabled">
+        <option value="true" {% if config.tg_enabled %}selected{% endif %}>开启</option>
+        <option value="false" {% if not config.tg_enabled %}selected{% endif %}>关闭</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Bot Token</label><input type="text" id="tg_bot_token" value="{{ config.tg_bot_token or '' }}" placeholder="123456:ABC-DEF"></div>
+    <div class="form-row"><label>Chat ID</label><input type="text" id="tg_chat_id" value="{{ config.tg_chat_id or '' }}" placeholder="-100xxxxxxxxxx"></div>
+    <div class="form-row"><label>存量告警阈值</label><input type="number" id="alert_min_proxies" value="{{ config.alert_min_proxies or 100 }}"></div>
+    <div class="form-row"><button class="btn btn-outline" onclick="testTG()" style="margin-top:1.3rem">发送测试消息</button></div>
+  </div>
+</div>
+{% if config.error %}<div class="card" style="border-color:var(--danger)"><div style="color:var(--danger)">引擎连接失败: {{ config.error }}</div></div>{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+async function saveConfig(){
+  const data={
+    concurrency:+document.getElementById('concurrency').value,
+    timeout_sec:+document.getElementById('timeout_sec').value,
+    refresh_interval_min:+document.getElementById('refresh_interval_min').value,
+    verify_method:document.getElementById('verify_method').value,
+    honeypot_threshold:+document.getElementById('honeypot_threshold').value,
+    api_key:document.getElementById('api_key').value,
+    max_latency_ms:+document.getElementById('max_latency_ms').value,
+    score_decay_alpha:+document.getElementById('score_decay_alpha').value,
+    blacklist_fail_threshold:+document.getElementById('blacklist_fail_threshold').value,
+    blacklist_revive_rounds:+document.getElementById('blacklist_revive_rounds').value,
+    auto_purge_enabled:document.getElementById('auto_purge_enabled').value==='true',
+    auto_purge_rounds:+document.getElementById('auto_purge_rounds').value,
+    source_auto_rate_enabled:document.getElementById('source_auto_rate_enabled').value==='true',
+    source_min_valid_rate:+document.getElementById('source_min_valid_rate').value,
+    source_min_fetches:+document.getElementById('source_min_fetches').value,
+    tg_enabled:document.getElementById('tg_enabled').value==='true',
+    tg_bot_token:document.getElementById('tg_bot_token').value,
+    tg_chat_id:document.getElementById('tg_chat_id').value,
+    alert_min_proxies:+document.getElementById('alert_min_proxies').value
+  };
+  try{const r=await api('POST','/admin/api/config',data);toast(r.status==='updated'?'配置已保存并生效':''+JSON.stringify(r))}
+  catch(e){toast('保存失败: '+e.message)}
+}
+async function testTG(){
+  try{const r=await api('POST','/admin/api/tg/test');toast(r.status==='ok'?'测试消息已发送':'发送失败: '+(r.error||''))}
+  catch(e){toast('请求失败: '+e.message)}
+}
+</script>
+{% endblock %}

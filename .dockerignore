@@ -1,0 +1,11 @@
+proxy-pool/proxies.db
+proxy-pool/proxies.db-journal
+proxy-pool/proxy-pool.exe
+proxy-pool/proxy-pool.exe~
+proxy-pool/config.json
+*.pyc
+__pycache__
+.git
+.gitignore
+*.md
+.gemini/

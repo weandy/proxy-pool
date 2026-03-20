@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% set active = "dashboard" %}
+{% block title %}仪表盘 - Proxy Admin{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+.stats-row-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.6rem;margin-top:.6rem}
+.stat-sub{font-size:.72rem;color:var(--muted);margin-top:.2rem}
+.chart-wrap{position:relative;height:220px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="hd"><h1>仪表盘</h1>
+  <div class="toolbar">
+    <span id="sse-status" style="font-size:.75rem;color:var(--muted)">连接中...</span>
+    <button class="btn btn-primary" onclick="triggerTask()">抓取并验证</button>
+    <button class="btn btn-outline" onclick="cancelTask()">取消任务</button>
+  </div>
+</div>
+
+<div class="stats-grid">
+  <div class="card stat-card"><div class="stat-num" id="s-total">-</div><div class="stat-label">有效代理</div></div>
+  <div class="card stat-card"><div class="stat-num info" id="s-https">-</div><div class="stat-label">支持 HTTPS</div></div>
+  <div class="card stat-card"><div class="stat-num warn" id="s-blacklisted">-</div><div class="stat-label">黑名单</div></div>
+  <div class="card stat-card"><div class="stat-num" id="s-score" style="color:var(--accent)">-</div><div class="stat-label">平均评分</div></div>
+  <div class="card stat-card">
+    <div class="stat-num" id="s-engine" style="font-size:1.2rem;color:var(--muted)">连接中</div>
+    <div class="stat-label">引擎状态</div>
+  </div>
+</div>
+
+<div class="stats-row-2">
+  <div class="card stat-card"><div class="stat-num" id="s-latency" style="font-size:1.6rem;color:var(--info)">-</div><div class="stat-label">平均延迟(ms)</div></div>
+  <div class="card stat-card"><div class="stat-num" id="s-today" style="font-size:1.6rem;color:var(--success)">-</div><div class="stat-label">今日新增</div></div>
+  <div class="card stat-card"><div class="stat-num" id="s-idc" style="font-size:1.6rem;color:var(--warn)">-</div><div class="stat-label">IDC</div><div class="stat-sub" id="s-idc-pct">-</div></div>
+  <div class="card stat-card"><div class="stat-num" id="s-isp" style="font-size:1.6rem;color:var(--success)">-</div><div class="stat-label">ISP</div><div class="stat-sub" id="s-isp-pct">-</div></div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem">
+  <div class="card">
+    <div class="card-h">任务进度</div>
+    <div id="task-area"><div class="empty" style="padding:1rem">无任务运行</div></div>
+  </div>
+  <div class="card">
+    <div class="card-h">地域分布 TOP 10</div>
+    <div id="country-area"><div class="empty" style="padding:1rem">暂无数据</div></div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <div class="card-h">历史趋势（近 30 天）</div>
+  <div class="chart-wrap"><canvas id="trend-chart"></canvas></div>
+</div>
+
+<div class="card" style="margin-top:1rem" id="runtime-card" hidden>
+  <div class="card-h">引擎运行时</div>
+  <div id="runtime-area" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem;font-size:.85rem;color:var(--text-2)"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function phaseText(p){const m={verify:'HTTP 验证',verify_https:'HTTPS 复测',fetch:'抓取中',ip_detect:'IP 检测',idle:'空闲'};return m[p]||(p||'空闲')}
+function updateDashboard(s){
+  document.getElementById('s-total').textContent=s.total_proxies??0;
+  document.getElementById('s-https').textContent=s.https_count??0;
+  document.getElementById('s-blacklisted').textContent=s.blacklisted_count??0;
+  document.getElementById('s-score').textContent=(s.avg_score??0).toFixed(1);
+  document.getElementById('s-latency').textContent=Math.round(s.avg_latency??0);
+  document.getElementById('s-today').textContent=s.today_new??0;
+  const idc=s.idc_count??0,isp=s.isp_count??0,total=s.total_proxies||1;
+  document.getElementById('s-idc').textContent=idc;
+  document.getElementById('s-isp').textContent=isp;
+  document.getElementById('s-idc-pct').textContent=(idc/total*100).toFixed(1)+'%';
+  document.getElementById('s-isp-pct').textContent=(isp/total*100).toFixed(1)+'%';
+  const task=s.task||{};
+  const eng=document.getElementById('s-engine');
+  eng.textContent=task.running?phaseText(task.phase):'空闲';
+  eng.style.color=task.running?'var(--accent)':'var(--muted)';
+  const ta=document.getElementById('task-area');
+  if(task.running){
+    const pct=(task.pct_done??0).toFixed(1);
+    ta.innerHTML=`<div style="margin-bottom:.5rem;font-size:.88rem;color:var(--text-2)">阶段: <strong style="color:var(--text)">${phaseText(task.phase)}</strong> | ${task.done??0} / ${task.total??0} (${pct}%)</div><div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),#6c5ce7);border-radius:3px;transition:width .3s"></div></div>`;
+  }else{ta.innerHTML='<div class="empty" style="padding:1rem">无任务运行</div>'}
+  const ca=document.getElementById('country-area');
+  const cs=(s.country_stats||[]).slice(0,10);
+  if(cs.length){
+    let rows=cs.map(c=>`<tr><td><span class="tag">${c.country}</span></td><td>${c.count}</td></tr>`).join('');
+    ca.innerHTML=`<table><tr><th>国家</th><th>数量</th></tr>${rows}</table>`;
+  }else{ca.innerHTML='<div class="empty" style="padding:1rem">暂无数据</div>'}
+  const rc=document.getElementById('runtime-card');
+  const ra=document.getElementById('runtime-area');
+  if(s.runtime&&s.runtime.os){
+    rc.hidden=false;
+    ra.innerHTML=`<div>OS: <strong style="color:var(--text)">${s.runtime.os}/${s.runtime.arch}</strong></div><div>Goroutines: <strong style="color:var(--text)">${s.runtime.goroutines}</strong></div><div>内存: <strong style="color:var(--text)">${(s.runtime.memory_alloc_mb||0).toFixed(1)} MB</strong></div><div>Go: <strong style="color:var(--text)">${s.runtime.go_version}</strong></div>`;
+  }else{rc.hidden=true}
+}
+
+// SSE
+let sse;
+function connectSSE(){
+  const indicator=document.getElementById('sse-status');
+  sse=new EventSource('/admin/api/sse/stats');
+  sse.onopen=()=>{indicator.textContent='实时连接';indicator.style.color='var(--success)'};
+  sse.onmessage=(e)=>{try{updateDashboard(JSON.parse(e.data))}catch(err){console.error(err)}};
+  sse.onerror=()=>{indicator.textContent='已断开';indicator.style.color='var(--danger)';sse.close();setTimeout(connectSSE,3000)};
+}
+connectSSE();
+async function triggerTask(){const r=await api('POST','/admin/api/task/trigger');toast(r.status==='triggered'?'已触发抓取任务':''+r.status)}
+async function cancelTask(){await api('POST','/admin/api/task/cancel');toast('已取消任务')}
+
+// 历史趋势图
+let trendChart=null;
+async function loadTrend(){
+  try{
+    const r=await api('GET','/admin/api/stats/daily?days=30');
+    const stats=r.stats||[];
+    if(!stats.length)return;
+    const labels=stats.map(s=>s.date.slice(5));
+    const ctx=document.getElementById('trend-chart').getContext('2d');
+    if(trendChart)trendChart.destroy();
+    trendChart=new Chart(ctx,{
+      type:'line',
+      data:{
+        labels,
+        datasets:[
+          {label:'存活数',data:stats.map(s=>s.alive),borderColor:'#3d9be9',backgroundColor:'rgba(61,155,233,.08)',fill:true,tension:.3,pointRadius:2},
+          {label:'新增',data:stats.map(s=>s.new_count),borderColor:'#45b26b',backgroundColor:'transparent',tension:.3,pointRadius:2},
+          {label:'淘汰',data:stats.map(s=>s.purged),borderColor:'#e05252',backgroundColor:'transparent',tension:.3,pointRadius:2}
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:'#a3a09a',font:{size:11}}}},
+        scales:{
+          x:{ticks:{color:'#6d6a63',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}},
+          y:{ticks:{color:'#6d6a63',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}}
+        }
+      }
+    });
+  }catch(e){console.error('趋势图加载失败',e)}
+}
+loadTrend();
+</script>
+{% endblock %}

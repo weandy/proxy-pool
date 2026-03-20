@@ -1,0 +1,30 @@
+services:
+  proxy-pool:
+    build: .
+    container_name: proxy-pool
+    restart: unless-stopped
+    ports:
+      # 格式: "外部端口:内部端口"
+      # 绑定 127.0.0.1 表示只允许本机访问（通过 Caddy 反代对外）
+      # 如果不用反代想直接公网访问，改成 "9090:9090"
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - proxy-data:/app/proxy-pool/data
+    # 所有环境变量从 .env 文件读取，不用写在这里了
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+volumes:
+  proxy-data:
+    driver: local

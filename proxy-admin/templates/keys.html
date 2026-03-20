@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% set active = "keys" %}
+{% block title %}Key 管理 - Proxy Admin{% endblock %}
+{% block content %}
+<div class="hd"><h1>API Key 管理</h1>
+  <button class="btn btn-primary" onclick="showCreate()">+ 创建 Key</button>
+</div>
+
+<div class="card" id="createForm" style="display:none">
+  <div class="card-h">创建新 Key</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+    <div class="form-row"><label>客户名称</label><input type="text" id="c_name" placeholder="客户名称"></div>
+    <div class="form-row"><label>日配额 (0=不限)</label><input type="number" id="c_daily" value="0"></div>
+    <div class="form-row"><label>月配额 (0=不限)</label><input type="number" id="c_monthly" value="0"></div>
+    <div class="form-row"><label>允许国家 (逗号分隔)</label><input type="text" id="c_countries" placeholder="US,JP,KR"></div>
+    <div class="form-row"><label>允许协议</label><input type="text" id="c_protocols" placeholder="http,https"></div>
+    <div class="form-row"><label>过期时间</label><input type="text" id="c_expires" placeholder="2025-12-31"></div>
+  </div>
+  <div style="margin-top:.5rem;display:flex;gap:.5rem">
+    <button class="btn btn-primary" onclick="createKey()">确认创建</button>
+    <button class="btn btn-outline" onclick="hideCreate()">取消</button>
+  </div>
+</div>
+
+<div class="card">
+  <div style="font-size:.82rem;color:var(--muted);margin-bottom:.8rem">共 {{ keys|length }} 个 Key</div>
+  {% if keys %}
+  <table id="t-keys">
+    <tr><th>名称</th><th>API Key</th><th>状态</th><th>日用/配额</th><th>月用/配额</th><th>权限</th><th>操作</th></tr>
+    {% for k in keys %}
+    <tr>
+      <td><strong>{{ k.name }}</strong></td>
+      <td><span class="mono" style="font-size:.75rem">{{ k.key[:12] }}...{{ k.key[-4:] }}</span>
+        <button class="btn btn-outline btn-sm" onclick="copyKey('{{ k.key }}')" style="font-size:.68rem;padding:1px 5px;margin-left:4px">复制</button></td>
+      <td>{% if k.is_active %}<span class="status-active">活跃</span>
+          {% else %}<span class="status-disabled">禁用</span>{% endif %}</td>
+      <td>{{ k.usage.today }} / {{ k.quota_daily or '∞' }}</td>
+      <td>{{ k.usage.month }} / {{ k.quota_monthly or '∞' }}</td>
+      <td style="font-size:.76rem;color:var(--muted)">
+        {% if k.allowed_countries %}国家: {{ k.allowed_countries }}{% endif %}
+        {% if k.allowed_protocols %} 协议: {{ k.allowed_protocols }}{% endif %}
+        {% if not k.allowed_countries and not k.allowed_protocols %}全部{% endif %}
+      </td>
+      <td style="display:flex;gap:.3rem">
+        {% if k.is_active %}
+        <button class="btn btn-outline btn-sm" onclick="toggleKey({{ k.id }}, 0)">禁用</button>
+        {% else %}
+        <button class="btn btn-success btn-sm" onclick="toggleKey({{ k.id }}, 1)">启用</button>
+        {% endif %}
+        <button class="btn btn-danger btn-sm" onclick="deleteKey({{ k.id }}, '{{ k.name }}')">删除</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <div class="empty">暂无 API Key，点击上方按钮创建</div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function showCreate(){document.getElementById('createForm').style.display='block'}
+function hideCreate(){document.getElementById('createForm').style.display='none'}
+function copyKey(k){navigator.clipboard.writeText(k);toast('已复制到剪贴板')}
+async function createKey(){
+  const data={
+    name:document.getElementById('c_name').value||'unnamed',
+    quota_daily:+document.getElementById('c_daily').value,
+    quota_monthly:+document.getElementById('c_monthly').value,
+    allowed_countries:document.getElementById('c_countries').value,
+    allowed_protocols:document.getElementById('c_protocols').value,
+    expires_at:document.getElementById('c_expires').value||null
+  };
+  const r=await api('POST','/admin/api/keys/create',data);
+  if(r.key){toast('Key 已创建');setTimeout(()=>location.reload(),800)}
+  else{toast('创建失败')}
+}
+async function toggleKey(id,active){
+  await api('PUT','/admin/api/keys/'+id,{is_active:active});
+  toast(active?'已启用':'已禁用');setTimeout(()=>location.reload(),500)
+}
+async function deleteKey(id,name){
+  if(!confirm('确认删除 Key "'+name+'"？'))return;
+  await api('DELETE','/admin/api/keys/'+id);toast('已删除');setTimeout(()=>location.reload(),500)
+}
+paginate('t-keys',10);
+</script>
+{% endblock %}

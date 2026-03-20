@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% set active = "proxies" %}
+{% block title %}代理列表 - Proxy Admin{% endblock %}
+{% block head %}
+<style>
+.filter-bar{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-bottom:.5rem}
+.filter-bar .filter-group{display:flex;align-items:center;gap:.3rem}
+.filter-bar label{font-size:.76rem;color:var(--muted);font-weight:600;white-space:nowrap}
+.filter-bar input,.filter-bar select{padding:.3rem .5rem;font-size:.82rem;width:auto;min-width:80px}
+.filter-bar select{min-width:90px}
+.type-idc{font-size:.7rem;font-weight:700;padding:.12rem .4rem;border-radius:5px;background:rgba(224,165,53,.12);color:var(--warn);letter-spacing:.3px}
+.type-isp{font-size:.7rem;font-weight:700;padding:.12rem .4rem;border-radius:5px;background:rgba(69,178,107,.12);color:var(--success);letter-spacing:.3px}
+.type-unknown{font-size:.7rem;font-weight:700;padding:.12rem .4rem;border-radius:5px;background:var(--surface-3);color:var(--muted);letter-spacing:.3px}
+.check-cell{width:36px;text-align:center;vertical-align:middle}
+.isp-cell{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;font-size:.76rem;color:var(--text-2)}
+.isp-cell:hover{color:var(--accent)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="hd"><h1>代理列表</h1>
+  <div class="toolbar">
+    <button class="btn btn-danger btn-sm" onclick="blacklistSelected()">批量拉黑</button>
+    <button class="btn btn-outline btn-sm" onclick="reviveAll()">解除全部黑名单</button>
+    <div style="width:1px;height:24px;background:var(--border);margin:0 .3rem"></div>
+    <button class="btn btn-outline btn-sm" onclick="exportProxies('txt')">导出 TXT</button>
+    <button class="btn btn-outline btn-sm" onclick="exportProxies('csv')">导出 CSV</button>
+  </div>
+</div>
+
+<div class="card" style="padding:.8rem 1.2rem">
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label>类型</label>
+      <select id="f-ip-type" onchange="applyFilter()">
+        <option value="">全部</option>
+        <option value="idc" {% if filters.ip_type == 'idc' %}selected{% endif %}>IDC</option>
+        <option value="isp" {% if filters.ip_type == 'isp' %}selected{% endif %}>ISP</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>协议</label>
+      <select id="f-protocol" onchange="applyFilter()">
+        <option value="">全部</option>
+        <option value="http" {% if filters.protocol == 'http' %}selected{% endif %}>HTTP</option>
+        <option value="http,https" {% if filters.protocol == 'http,https' %}selected{% endif %}>HTTPS</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>国家</label>
+      <input type="text" id="f-country" value="{{ filters.country }}" placeholder="US,CN" style="width:80px" onkeyup="if(event.key==='Enter')applyFilter()">
+    </div>
+    <div class="filter-group">
+      <label>最低评分</label>
+      <input type="number" id="f-min-score" value="{{ filters.min_score }}" placeholder="0" style="width:60px" onkeyup="if(event.key==='Enter')applyFilter()">
+    </div>
+    <div class="filter-group">
+      <label>最大延迟</label>
+      <input type="number" id="f-max-latency" value="{{ filters.max_latency }}" placeholder="ms" style="width:70px" onkeyup="if(event.key==='Enter')applyFilter()">
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="applyFilter()">筛选</button>
+    <button class="btn btn-outline btn-sm" onclick="resetFilter()">重置</button>
+  </div>
+</div>
+
+<div class="card">
+  {% if data.proxies %}
+  <table id="t-proxies">
+    <tr>
+      <th class="check-cell"><input type="checkbox" id="checkAll" onclick="toggleAll(this)"></th>
+      <th>地址</th><th>国家</th><th>类型</th><th>ISP</th><th>协议</th><th>评分</th><th>延迟</th><th>验证</th><th>首次发现</th><th>最近成功</th><th>操作</th>
+    </tr>
+    {% for p in data.proxies %}
+    <tr>
+      <td class="check-cell"><input type="checkbox" class="proxy-check" value="{{ p.addr }}"></td>
+      <td><span class="mono">{{ p.addr }}</span></td>
+      <td><span class="tag">{{ p.country }}</span></td>
+      <td>
+        {% if p.ip_type == 'idc' %}<span class="type-idc">IDC</span>
+        {% elif p.ip_type == 'isp' %}<span class="type-isp">ISP</span>
+        {% else %}<span class="type-unknown">--</span>{% endif %}
+      </td>
+      <td class="isp-cell" title="{{ p.isp_name or '' }}" onclick="copyText('{{ p.isp_name or '' }}')">{{ p.isp_name[:18] if p.isp_name else '—' }}</td>
+      <td>
+        {% if p.protocol == 'http,https' %}<span class="tag" style="background:rgba(109,176,224,.12);color:var(--info)">HTTPS</span>
+        {% else %}<span class="tag" style="background:var(--surface-3);color:var(--muted)">HTTP</span>{% endif %}
+      </td>
+      <td>
+        {% if p.score >= 70 %}<span class="score-good">{{ "%.0f"|format(p.score) }}</span>
+        {% elif p.score >= 40 %}<span class="score-mid">{{ "%.0f"|format(p.score) }}</span>
+        {% else %}<span class="score-bad">{{ "%.0f"|format(p.score) }}</span>{% endif %}
+      </td>
+      <td><span class="mono" style="color:var(--muted)">{% if p.avg_latency > 0 %}{{ "%.0f"|format(p.avg_latency) }}ms{% else %}&mdash;{% endif %}</span></td>
+      <td style="color:var(--muted)">{{ p.check_count }}</td>
+      <td style="font-size:.74rem;color:var(--text-2)">{{ p.first_seen[:16] if p.first_seen else '—' }}</td>
+      <td style="font-size:.74rem;color:var(--text-2)">{{ p.last_success[:16] if p.last_success else '—' }}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="blacklist('{{ p.addr }}')">拉黑</button></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <div class="pager">
+    <span class="pager-info pager-info-left">共 {{ data.total or 0 }} 条</span>
+    <div class="pager-center">
+      {% if page > 1 %}<button onclick="goPage({{ page - 1 }})">‹</button>{% endif %}
+      {% if page > 2 %}<button onclick="goPage(1)">1</button>{% endif %}
+      {% if page > 3 %}<button disabled style="border:none;background:none;width:auto;opacity:.5">...</button>{% endif %}
+      {% if page > 1 %}<button onclick="goPage({{ page - 1 }})">{{ page - 1 }}</button>{% endif %}
+      <button class="active" disabled>{{ page }}</button>
+      {% if data.count == 20 %}<button onclick="goPage({{ page + 1 }})">{{ page + 1 }}</button>{% endif %}
+      {% if data.count == 20 %}<button onclick="goPage({{ page + 1 }})">›</button>{% endif %}
+    </div>
+    <span class="pager-info pager-info-right">第 {{ page }} 页 · 每页 20 条</span>
+  </div>
+  {% else %}
+  <div class="empty">暂无代理数据</div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function toggleAll(el){document.querySelectorAll('.proxy-check').forEach(c=>c.checked=el.checked)}
+function getSelected(){return[...document.querySelectorAll('.proxy-check:checked')].map(c=>c.value)}
+function copyText(t){if(t){navigator.clipboard.writeText(t);toast('已复制: '+t)}}
+
+function getFilterParams(){
+  const p=new URLSearchParams();
+  const ip_type=document.getElementById('f-ip-type').value;
+  const protocol=document.getElementById('f-protocol').value;
+  const country=document.getElementById('f-country').value.trim();
+  const min_score=document.getElementById('f-min-score').value.trim();
+  const max_latency=document.getElementById('f-max-latency').value.trim();
+  if(ip_type)p.set('ip_type',ip_type);
+  if(protocol)p.set('protocol',protocol);
+  if(country)p.set('country',country);
+  if(min_score)p.set('min_score',min_score);
+  if(max_latency)p.set('max_latency',max_latency);
+  return p;
+}
+
+function applyFilter(){
+  const p=getFilterParams();
+  p.set('page','1');
+  location.href='/proxies?'+p.toString();
+}
+function resetFilter(){location.href='/proxies'}
+function goPage(pg){
+  const p=getFilterParams();
+  p.set('page',pg);
+  location.href='/proxies?'+p.toString();
+}
+
+function exportProxies(fmt){
+  const p=getFilterParams();
+  p.set('fmt',fmt);
+  window.open('/admin/api/proxies/export?'+p.toString(),'_blank');
+}
+
+async function blacklistSelected(){
+  const addrs=getSelected();
+  if(!addrs.length){toast('请先勾选要拉黑的代理');return}
+  if(!confirm('确定拉黑 '+addrs.length+' 个代理？'))return;
+  try{await api('POST','/admin/api/proxies/blacklist',{addrs});toast('已拉黑 '+addrs.length+' 个代理');setTimeout(()=>location.reload(),500)}
+  catch(e){toast('操作失败: '+e.message)}
+}
+async function blacklist(addr){if(!confirm('确认拉黑 '+addr+' ?'))return;await api('POST','/admin/api/proxies/blacklist',{addrs:[addr]});toast('已拉黑');setTimeout(()=>location.reload(),500)}
+async function reviveAll(){if(!confirm('确认解除全部黑名单?'))return;const r=await api('POST','/admin/api/proxies/revive');toast('已解除 '+(r.count||0)+' 条');setTimeout(()=>location.reload(),500)}
+</script>
+{% endblock %}

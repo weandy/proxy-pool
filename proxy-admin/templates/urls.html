@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% set active = "urls" %}
+{% block title %}代理源管理 - Proxy Admin{% endblock %}
+{% block head %}
+<style>
+.url-cell{max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;position:relative}
+.url-cell:hover{color:var(--accent)}
+.url-cell:active::after{content:'已复制';position:absolute;right:0;top:50%;transform:translateY(-50%);font-size:.68rem;color:var(--accent);background:var(--surface);padding:1px 6px;border-radius:4px}
+.check-cell{width:36px;text-align:center;vertical-align:middle}
+</style>
+{% endblock %}
+{% block content %}
+<div class="hd"><h1>代理源管理</h1>
+  <div class="toolbar">
+    <button class="btn btn-primary" onclick="showAddModal()">+ 添加源</button>
+    <button class="btn btn-outline" onclick="importFile()">导入文件</button>
+    <button class="btn btn-danger" onclick="deleteSelected()">删除选中</button>
+    <input type="file" id="fileInput" accept=".txt,.json" style="display:none" onchange="handleFile(event)">
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-h">源列表 & 质量统计 <span style="font-weight:400">共 {{ url_data.count or 0 }} 个</span></div>
+  {% if source_data.sources %}
+  <table id="t-urls">
+    <tr>
+      <th class="check-cell"><input type="checkbox" id="checkAll" onclick="toggleAll(this)"></th>
+      <th>源 URL</th>
+      <th>入库</th>
+      <th>抓取</th>
+      <th>去重</th>
+      <th>重复率</th>
+      <th>HTTP</th>
+      <th>HTTPS</th>
+      <th>有效率</th>
+      <th>均评分</th>
+      <th>拉取成功率</th>
+      <th>最后成功抓取</th>
+    </tr>
+    {% for s in source_data.sources %}
+    <tr>
+      <td class="check-cell"><input type="checkbox" class="url-check" value="{{ s.url }}"></td>
+      <td class="url-cell" title="{{ s.url }}" onclick="copyURL(this, '{{ s.url }}')">
+        <span class="mono" style="font-size:.78rem">{{ s.url[:50] }}{% if s.url|length > 50 %}...{% endif %}</span>
+      </td>
+      <td>{{ s.total or 0 }}</td>
+      <td style="color:var(--muted)">{{ s.total_fetched or '—' }}</td>
+      <td style="color:var(--muted)">{{ s.total_new or '—' }}</td>
+      <td>
+        {% if s.dup_rate is defined and s.total_fetched %}
+          {% if s.dup_rate >= 90 %}<span class="score-bad">{{ "%.0f"|format(s.dup_rate) }}%</span>
+          {% elif s.dup_rate >= 60 %}<span class="score-mid">{{ "%.0f"|format(s.dup_rate) }}%</span>
+          {% else %}<span class="score-good">{{ "%.0f"|format(s.dup_rate) }}%</span>{% endif %}
+        {% else %}—{% endif %}
+      </td>
+      <td style="color:var(--success)">{{ s.alive_http }}</td>
+      <td style="color:var(--info)">{{ s.alive_https }}</td>
+      <td>
+        {% set alive = s.alive_http + s.alive_https %}
+        {% set rate = (alive / s.total * 100) if s.total > 0 else 0 %}
+        {% if rate >= 10 %}<span class="score-good">{{ "%.1f"|format(rate) }}%</span>
+        {% elif rate >= 3 %}<span class="score-mid">{{ "%.1f"|format(rate) }}%</span>
+        {% else %}<span class="score-bad">{{ "%.1f"|format(rate) }}%</span>{% endif %}
+      </td>
+      <td>{{ "%.0f"|format(s.avg_score or 0) }}</td>
+      <td>
+        {% if s.fetch_success_rate is defined and s.total_fetched %}
+          {% if s.fetch_success_rate >= 80 %}<span class="score-good">{{ "%.0f"|format(s.fetch_success_rate) }}%</span>
+          {% elif s.fetch_success_rate >= 40 %}<span class="score-mid">{{ "%.0f"|format(s.fetch_success_rate) }}%</span>
+          {% else %}<span class="score-bad">{{ "%.0f"|format(s.fetch_success_rate) }}%</span>{% endif %}
+        {% else %}—{% endif %}
+      </td>
+      <td style="font-size:.74rem;color:var(--muted);white-space:nowrap">{{ s.last_fetch_at[:16] if s.last_fetch_at else '—' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <div class="empty">暂无代理源，请添加或导入 URL</div>
+  {% endif %}
+</div>
+
+{% if url_data.error %}<div class="card" style="border-color:var(--danger)"><div style="color:var(--danger)">{{ url_data.error }}</div></div>{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+function toggleAll(el){document.querySelectorAll('.url-check').forEach(c=>c.checked=el.checked)}
+function getSelected(){return[...document.querySelectorAll('.url-check:checked')].map(c=>c.value)}
+function copyURL(el, url){
+  navigator.clipboard.writeText(url);
+  toast('已复制: '+url.substring(0,50)+'...');
+}
+async function deleteSelected(){
+  const urls=getSelected();
+  if(!urls.length){toast('请先勾选要删除的源');return}
+  if(!confirm('确定删除 '+urls.length+' 个源？'))return;
+  try{const r=await api('DELETE','/admin/api/urls',{urls});toast('已删除 '+(r.count||urls.length)+' 个源');setTimeout(()=>location.reload(),500)}
+  catch(e){toast('操作失败: '+e.message)}
+}
+function showAddModal(){
+  const url=prompt('输入源 URL（多个用换行分隔）：');
+  if(!url)return;
+  const urls=url.split('\n').map(s=>s.trim()).filter(s=>s&&s.startsWith('http'));
+  if(!urls.length){toast('请输入有效的 URL');return}
+  addURLs(urls);
+}
+async function addURLs(urls){
+  try{const r=await api('POST','/admin/api/urls/add',{urls});toast('已添加 '+(r.count||urls.length)+' 个源');setTimeout(()=>location.reload(),500)}
+  catch(e){toast('操作失败: '+e.message)}
+}
+function importFile(){document.getElementById('fileInput').click()}
+function handleFile(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    let text=ev.target.result;let urls=[];
+    try{urls=JSON.parse(text);if(!Array.isArray(urls))urls=[]}catch(e){}
+    if(!urls.length)urls=text.split('\n').map(s=>s.trim()).filter(s=>s&&s.startsWith('http'));
+    if(!urls.length){toast('文件中未找到有效 URL');return}
+    if(confirm('发现 '+urls.length+' 个 URL，确认导入？'))addURLs(urls);
+  };
+  reader.readAsText(file);e.target.value='';
+}
+paginate('t-urls',20);
+</script>
+{% endblock %}

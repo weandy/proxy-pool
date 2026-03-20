@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% set active = "usage" %}
+{% block title %}用量统计 - Proxy Admin{% endblock %}
+{% block content %}
+<div class="hd"><h1>用量统计</h1>
+  <div class="toolbar">
+    <select id="keyFilter" onchange="filterKey()" style="width:200px">
+      <option value="0" {% if selected_key == 0 %}selected{% endif %}>全部 Key</option>
+      {% for k in keys %}
+      <option value="{{ k.id }}" {% if selected_key == k.id %}selected{% endif %}>{{ k.name }} ({{ k.key[:8] }}...)</option>
+      {% endfor %}
+    </select>
+    <a class="btn btn-outline btn-sm" href="/admin/api/usage/csv?key_id={{ selected_key }}">导出 CSV</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-h">最近 30 天请求量</div>
+  {% if daily %}
+  <div style="display:flex;align-items:flex-end;gap:2px;height:120px;padding-top:1rem">
+    {% set max_req = daily|map(attribute='requests')|max %}
+    {% for d in daily %}
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
+      <div style="width:100%;background:linear-gradient(180deg,var(--accent),#5a7ce8);border-radius:3px 3px 0 0;min-height:2px;
+        height:{{ (d.requests / max_req * 100) if max_req > 0 else 0 }}%"
+        title="{{ d.date }}: {{ d.requests }} 请求"></div>
+    </div>
+    {% endfor %}
+  </div>
+  <div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted);margin-top:.3rem">
+    <span>{{ daily[0].date if daily else '' }}</span>
+    <span>{{ daily[-1].date if daily else '' }}</span>
+  </div>
+  {% else %}<div class="empty" style="padding:1rem">暂无数据</div>{% endif %}
+</div>
+
+<div class="card">
+  <div class="card-h">最近调用记录</div>
+  {% if logs %}
+  <table id="t-usage">
+    <tr><th>时间</th><th>Key</th><th>端点</th><th>客户 IP</th><th>UA</th><th>代理数</th><th>耗时</th><th>状态</th></tr>
+    {% for l in logs %}
+    <tr>
+      <td style="font-size:.76rem;white-space:nowrap">{{ l.created_at }}</td>
+      <td><span class="mono" style="font-size:.72rem">{{ l.api_key[:8] }}...</span></td>
+      <td style="font-size:.82rem">{{ l.endpoint }}</td>
+      <td><span class="mono" style="font-size:.78rem">{{ l.client_ip }}</span></td>
+      <td style="font-size:.72rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ l.user_agent }}">{{ l.user_agent[:35] }}</td>
+      <td>{{ l.proxy_count }}</td>
+      <td><span class="mono" style="font-size:.76rem">{{ l.response_ms }}ms</span></td>
+      <td>{% if l.status_code == 200 %}<span style="color:var(--success)">{{ l.status_code }}</span>
+          {% else %}<span style="color:var(--danger)">{{ l.status_code }}</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<div class="empty" style="padding:1rem">暂无调用记录</div>{% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function filterKey(){const id=document.getElementById('keyFilter').value;location.href='/usage?key_id='+id}
+paginate('t-usage',10);
+</script>
+{% endblock %}

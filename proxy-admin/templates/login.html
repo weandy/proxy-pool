@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}登录 - Proxy Admin{% endblock %}
+{% block body %}
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)">
+  <div style="width:400px">
+    <div class="card" style="padding:2.5rem;border:1px solid var(--border-2)">
+      <div style="text-align:center;margin-bottom:2rem">
+        <div style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,var(--accent),#6c5ce7);margin-bottom:.8rem">
+          <span style="color:#fff;font-weight:800;font-size:1.2rem">P</span>
+        </div>
+        <h2 style="font-weight:700;font-size:1.3rem;letter-spacing:-.3px;color:var(--text)">Proxy Admin</h2>
+        <p style="font-size:.82rem;color:var(--muted);margin-top:.3rem">管理后台登录</p>
+      </div>
+      {% if error %}<div style="color:var(--danger);font-size:.85rem;margin-bottom:1rem;text-align:center;padding:.5rem;background:rgba(224,82,82,.08);border-radius:var(--radius-sm)">{{ error }}</div>{% endif %}
+      <form method="POST" action="/login">
+        <div class="form-row"><label>用户名</label><input type="text" name="username" required autofocus></div>
+        <div class="form-row"><label>密码</label><input type="password" name="password" required></div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center;padding:.65rem;margin-top:.5rem;font-size:.92rem">登 录</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

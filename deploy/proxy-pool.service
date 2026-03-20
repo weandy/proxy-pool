@@ -1,0 +1,18 @@
+[Unit]
+Description=Proxy Pool Engine (Go)
+After=network.target
+
+[Service]
+Type=simple
+User=proxypool
+WorkingDirectory=/opt/proxy-pool
+ExecStart=/opt/proxy-pool/proxy-pool
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+# 环境变量（可选覆盖 config.json）
+# Environment=LISTEN_ADDR=127.0.0.1:18080
+
+[Install]
+WantedBy=multi-user.target
