@@ -7,7 +7,6 @@ __pycache__/
 
 # Go 编译产物
 proxy-pool/proxy-pool
-proxy-pool/proxy-pool-linux
 
 # GeoIP 数据库（运行时自动下载）
 *.mmdb
