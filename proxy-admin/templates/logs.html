@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% set active = "logs" %}
+{% block title %}引擎日志 - Proxy Admin{% endblock %}
+{% block content %}
+<div class="hd">
+  <h1>引擎日志</h1>
+  <div class="toolbar">
+    <select id="logLevel" onchange="loadLogs()" style="padding:.4rem .6rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem">
+      <option value="">全部级别</option>
+      <option value="INFO">INFO</option>
+      <option value="WARN">WARN</option>
+      <option value="ERROR">ERROR</option>
+    </select>
+    <input id="logSearch" type="text" placeholder="搜索日志..." oninput="filterLogs()" style="padding:.4rem .6rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.82rem;width:200px">
+    <label style="display:flex;align-items:center;gap:4px;font-size:.82rem;color:var(--muted);cursor:pointer">
+      <input type="checkbox" id="autoRefresh" checked onchange="toggleAutoRefresh()"> 自动刷新
+    </label>
+    <button class="btn" onclick="loadLogs()">刷新</button>
+  </div>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
+  <div id="logContainer" style="height:calc(100vh - 180px);overflow-y:auto;font-family:'JetBrains Mono','Fira Code','Cascadia Code',monospace;font-size:.78rem;line-height:1.7;padding:.8rem 1rem;background:#0d1117">
+    <div id="logContent" style="color:#c9d1d9"></div>
+    <div id="logEmpty" style="color:var(--muted);text-align:center;padding:3rem">加载中...</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.log-line{padding:1px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.log-line:hover{background:rgba(255,255,255,.04)}
+.log-time{color:#8b949e}
+.log-level-INFO{color:#58a6ff}
+.log-level-WARN{color:#d29922}
+.log-level-ERROR{color:#f85149;font-weight:600}
+.log-msg{color:#c9d1d9}
+</style>
+<script>
+let allLogs = [];
+let refreshTimer = null;
+
+function renderLogs(logs) {
+  const content = document.getElementById('logContent');
+  const empty = document.getElementById('logEmpty');
+  if (!logs.length) {
+    empty.textContent = '暂无日志';
+    empty.style.display = 'block';
+    content.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+  content.innerHTML = logs.map(l =>
+    `<div class="log-line"><span class="log-time">${l.time||''}</span> <span class="log-level-${l.level}">[${l.level}]</span> <span class="log-msg">${escapeHtml(l.msg)}</span></div>`
+  ).join('');
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function filterLogs() {
+  const level = document.getElementById('logLevel').value;
+  const search = document.getElementById('logSearch').value.toLowerCase();
+  let filtered = allLogs;
+  if (level) filtered = filtered.filter(l => l.level === level);
+  if (search) filtered = filtered.filter(l => (l.msg||'').toLowerCase().includes(search));
+  renderLogs(filtered);
+}
+
+async function loadLogs() {
+  try {
+    const resp = await api('/admin/api/logs/engine?n=500');
+    allLogs = resp.logs || [];
+    filterLogs();
+    // 自动滚动到底部
+    const container = document.getElementById('logContainer');
+    container.scrollTop = container.scrollHeight;
+  } catch(e) {
+    document.getElementById('logEmpty').textContent = '加载失败: ' + e.message;
+    document.getElementById('logEmpty').style.display = 'block';
+  }
+}
+
+function toggleAutoRefresh() {
+  if (document.getElementById('autoRefresh').checked) {
+    startAutoRefresh();
+  } else {
+    stopAutoRefresh();
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  refreshTimer = setInterval(loadLogs, 3000);
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
+// 初始加载
+loadLogs();
+startAutoRefresh();
+</script>
+{% endblock %}

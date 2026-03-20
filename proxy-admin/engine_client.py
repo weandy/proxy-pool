@@ -118,6 +118,17 @@ class EngineClient:
         r.raise_for_status()
         return r.json()
 
+    async def get_logs(self, n: int = 200) -> list:
+        """获取引擎最近 N 条日志"""
+        try:
+            r = await self._get_client().get(
+                f"{self.base}/internal/logs",
+                headers=self.headers, params={"n": n}, timeout=10,
+            )
+            r.raise_for_status()
+            return r.json().get("logs", [])
+        except Exception:
+            return []
 
 # 全局实例
 engine = EngineClient()

@@ -315,6 +315,22 @@ async def urls_page(request: Request):
     })
 
 
+# ==================== 日志页面 ====================
+
+@app.get("/logs", response_class=HTMLResponse)
+async def logs_page(request: Request):
+    user = require_auth(request)
+    return templates.TemplateResponse("logs.html", {"request": request, "user": user})
+
+
+@app.get("/admin/api/logs/engine")
+async def admin_get_engine_logs(request: Request):
+    require_auth(request)
+    n = int(request.query_params.get("n", 200))
+    logs = await engine.get_logs(n)
+    return {"logs": logs}
+
+
 # ==================== Key 管理页面 ====================
 
 @app.get("/keys", response_class=HTMLResponse)

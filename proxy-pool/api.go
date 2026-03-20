@@ -112,6 +112,17 @@ func registerRoutes(mux *http.ServeMux, store *ProxyStore, sched *Scheduler, hot
 		handleURLs(w, r, hotCfg, store)
 	}))
 
+	// 引擎日志查看
+	mux.HandleFunc("/internal/logs", internal(func(w http.ResponseWriter, r *http.Request) {
+		n := 200
+		if v := r.URL.Query().Get("n"); v != "" {
+			if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+				n = parsed
+			}
+		}
+		writeJSON(w, map[string]interface{}{"logs": GetRecentLogs(n)})
+	}))
+
 	// 代理源质量统计
 	mux.HandleFunc("/internal/sources", internal(func(w http.ResponseWriter, r *http.Request) {
 		sources := store.SourceStats()
